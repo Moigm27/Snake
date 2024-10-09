@@ -6,7 +6,6 @@ namespace Snake
 
         #endregion
 
-
         #region Variables 
         /// <summary>
         /// Define las constantes y variables utilizadas en el juego de Snake.
@@ -32,21 +31,28 @@ namespace Snake
         private Point comidita;
         private Direction direccion;
         private Thread hiloJuego;
+        private Thread hiloDiff;
         private bool jugando;
 
-        private enum Direction {  Down, Left, Right, Up }
+        private int dificultad;
+        private string ColorPrin;
+        private List<PowerUp> powerUps;
+        private Random random = new Random();
+
+        private enum Direction { Down, Left, Right, Up }
 
         #endregion
+
         public Form1()
         {
             InitializeComponent();
-            Jugar();
         }
 
         private void Form1_Load(object sender, EventArgs e)
         {
 
         }
+
         /// <summary>
         /// Inicia el juego de Snake.
         /// Crea una nueva instancia del juego con las configuraciones iniciales, 
@@ -56,11 +62,17 @@ namespace Snake
         /// </summary>
         private void Jugar()
         {
+
+
             jugando = true;
             direccion = Direction.Right;
             serpiente = new List<Point>();
             serpiente.Add(new Point(anchoTablero / 2, alturaTablero / 2));
             GenerarComidita();
+
+            powerUps = new List<PowerUp>();
+            GenerarPowerUp();
+
             pictureBox = new PictureBox();
             pictureBox.Size = new Size(anchoTablero * tamCelda, alturaTablero * tamCelda);
             pictureBox.Location = new Point(10, 10);
@@ -82,6 +94,7 @@ namespace Snake
             Graphics g = e.Graphics;
             DibujarSerpiente(g);
             DibujarComidita(g);
+            DibujarPowerUps(g);
         }
 
         /// <summary>
@@ -90,12 +103,16 @@ namespace Snake
         /// Cada segmento de la serpiente se representa como un rectángulo de tamaño igual al tamaño de una celda en el tablero.
         /// </summary>
         /// <param name="g">El objeto Graphics utilizado para dibujar en el tablero de juego.</param>
-
         private void DibujarSerpiente(Graphics g)
         {
-            foreach (Point segment in serpiente)
+            for (int i = 0; i < serpiente.Count; i++)
             {
-                g.FillRectangle(Brushes.Green, segment.X * tamCelda, segment.Y * tamCelda, tamCelda, tamCelda);
+                Point segment = serpiente[i];
+
+                // Alterna entre el color de la cabeza y el cuerpo
+                Brush colorSegmento = (i % 2 == 0) ? new SolidBrush(colorCabeza) : new SolidBrush(colorCuerpo);
+
+                g.FillRectangle(colorSegmento, segment.X * tamCelda, segment.Y * tamCelda, tamCelda, tamCelda);
             }
         }
 
@@ -105,7 +122,6 @@ namespace Snake
         /// La posición de la comida se especifica por la coordenada (X, Y) de la variable comidita, multiplicada por el tamaño de una celda en el tablero.
         /// </summary>
         /// <param name="g">El objeto Graphics utilizado para dibujar en el tablero de juego.</param>
-
         private void DibujarComidita(Graphics g)
         {
             g.FillRectangle(Brushes.Red, comidita.X * tamCelda, comidita.Y * tamCelda, tamCelda, tamCelda);
@@ -129,12 +145,23 @@ namespace Snake
         /// </summary>
         private void BucleJuego()
         {
+            int contadorPowerUp = 0;
+
             while (jugando)
             {
                 MoverSerpiente();
                 revisarChoque();
                 pictureBox.Invalidate();
-                Thread.Sleep(100); // Velocidad del juego
+
+                // Generar un power-up cada cierto tiempo
+                contadorPowerUp++;
+                if (contadorPowerUp >= 50) // Cada 50 ciclos de juego
+                {
+                    GenerarPowerUp();
+                    contadorPowerUp = 0;
+                }
+
+                Thread.Sleep(dificultad); // Velocidad del juego
             }
         }
 
@@ -144,7 +171,6 @@ namespace Snake
         /// Inserta la nueva posición de la cabeza en la lista de segmentos de la serpiente y elimina el último segmento si la serpiente no ha comido la comida.
         /// Genera una nueva posición para la comida si la cabeza de la serpiente alcanza la comida.
         /// </summary>
-
         private void MoverSerpiente()
         {
             Point cabeza = serpiente[0];
@@ -167,21 +193,36 @@ namespace Snake
             }
 
             serpiente.Insert(0, nuevaCabeza);
+
+            // Comprueba si la serpiente come la comida
             if (nuevaCabeza == comidita)
-            {
-                serpiente.RemoveAt(serpiente.Count - 1);
-            }
-            else
             {
                 GenerarComidita();
             }
+            else
+            {
+                serpiente.RemoveAt(serpiente.Count - 1);
+            }
+
+            // Comprueba si la serpiente recoge un power-up
+            for (int i = 0; i < powerUps.Count; i++)
+            {
+                if (nuevaCabeza == powerUps[i].Position)
+                {
+                    AplicarPowerUp(powerUps[i]);
+                    powerUps.RemoveAt(i); // Elimina el power-up del tablero
+                    break;
+                }
+            }
         }
+
+        private Color colorCabeza = Color.Red;  // Color por defecto de la cabeza
+        private Color colorCuerpo = Color.Blue;  // Color por defecto del cuerpo
 
         /// <summary>
         /// Verifica si ha ocurrido una colisión de la cabeza de la serpiente con las paredes del tablero o con el cuerpo de la serpiente.
         /// Si la cabeza de la serpiente está fuera del tablero o choca con su propio cuerpo, finaliza el juego y muestra un mensaje de pérdida.
         /// </summary>
-
         private void revisarChoque()
         {
             Point cabeza = serpiente[0];
@@ -203,6 +244,7 @@ namespace Snake
                 }
             }
         }
+
         /// <summary>
         /// Procesa las teclas presionadas por el usuario y actualiza la dirección de movimiento de la serpiente en función de la tecla presionada.
         /// Si se presiona una tecla de dirección válida y no se está moviendo en la dirección opuesta, actualiza la dirección de la serpiente.
@@ -210,7 +252,6 @@ namespace Snake
         /// <param name="msg">El mensaje que se va a procesar.</param>
         /// <param name="keyData">Las teclas que se han presionado.</param>
         /// <returns>true si el carácter se procesa en el método; de lo contrario, false.</returns>
-
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
             switch (keyData)
@@ -234,5 +275,170 @@ namespace Snake
             }
             return base.ProcessCmdKey(ref msg, keyData);
         }
+
+        private void button1_Click(object sender, EventArgs e)
+        {
+            DefinirDificultad();
+            Thread.Sleep(1000);
+            panel1.Visible = false;
+            Jugar();
+        }
+
+        private void panel1_Paint(object sender, PaintEventArgs e)
+        {
+
+        }
+
+        public void DefinirDificultad()
+        {
+            int nivel = nvlDiff.SelectedIndex;
+            switch (nivel)
+            {
+                case 0:
+                    dificultad = 140;
+                    break;
+
+                case 1:
+                    dificultad = 110;
+                    break;
+
+                case 2:
+                    dificultad = 80;
+                    break;
+            }
+        }
+        private void ReiniciarJuego()
+        {
+            if (hiloJuego != null && hiloJuego.IsAlive)
+            {
+                jugando = false;
+                hiloJuego.Join();
+            }
+            Jugar();
+        }
+
+        private void ColorPrincipal_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            switch (ColorPrincipal.SelectedItem.ToString())
+            {
+                case "Rojo":
+                    colorCabeza = Color.Red;
+                    break;
+                case "Azul":
+                    colorCabeza = Color.Blue;
+                    break;
+                case "Verde":
+                    colorCabeza = Color.Green;
+                    break;
+                case "Amarillo":
+                    colorCabeza = Color.Yellow;
+                    break;
+                case "Naranja":
+                    colorCabeza = Color.Orange;
+                    break;
+                case "Morado":
+                    colorCabeza = Color.Purple;
+                    break;
+            }
+        }
+
+
+        private void GenerarPowerUp()
+        {
+            PowerUp.PowerUpType tipo = (PowerUp.PowerUpType)random.Next(0, 4); // Elige un tipo aleatorio
+            Point posicion = new Point(random.Next(anchoTablero), random.Next(alturaTablero)); // Posición aleatoria
+            powerUps.Add(new PowerUp(posicion, tipo));
+        }
+        private void DibujarPowerUps(Graphics g)
+        {
+            foreach (PowerUp powerUp in powerUps)
+            {
+                Brush color = Brushes.Yellow; // Color base para los power-ups
+                switch (powerUp.Tipo)
+                {
+                    case PowerUp.PowerUpType.SpeedUp:
+                        color = Brushes.Green;
+                        break;
+                    case PowerUp.PowerUpType.SlowDown:
+                        color = Brushes.Blue;
+                        break;
+                    case PowerUp.PowerUpType.Grow:
+                        color = Brushes.Purple;
+                        break;
+
+                }
+                g.FillRectangle(color, powerUp.Position.X * tamCelda, powerUp.Position.Y * tamCelda, tamCelda, tamCelda);
+            }
+        }
+        private void AplicarPowerUp(PowerUp powerUp)
+        {
+            switch (powerUp.Tipo)
+            {
+                case PowerUp.PowerUpType.SpeedUp:
+                    dificultad = Math.Max(10, dificultad - 30); // Aumenta la velocidad
+                    break;
+                case PowerUp.PowerUpType.SlowDown:
+                    dificultad += 70; // Disminuye la velocidad
+                    break;
+                case PowerUp.PowerUpType.Grow:
+                    serpiente.Add(serpiente[serpiente.Count - 1]); // Aumenta el tamaño de la serpiente
+                    break;
+
+            }
+        }
+
+        private void ColorSecundario_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            switch (ColorSecundario.SelectedItem.ToString())
+            {
+                case "Rojo":
+                    colorCuerpo = Color.Red;
+                    break;
+                case "Azul":
+                    colorCuerpo = Color.Blue;
+                    break;
+                case "Verde":
+                    colorCuerpo = Color.Green;
+                    break;
+                case "Amarillo":
+                    colorCuerpo = Color.Yellow;
+                    break;
+                case "Naranja":
+                    colorCuerpo = Color.Orange;
+                    break;
+                case "Morado":
+                    colorCuerpo = Color.Purple;
+                    break;
+            }
+        }
+
+
+        private void btnMultijugador_Click(object sender, EventArgs e)
+        {
+
+        }
+
+
+
+        //private void 
+
+
+    }
+
+    class PowerUp
+    {
+
+
+        public Point Position { get; set; }
+        public PowerUpType Tipo { get; set; }
+
+        public enum PowerUpType { SpeedUp, SlowDown, Grow, Shrink }
+
+        public PowerUp(Point position, PowerUpType tipo)
+        {
+            Position = position;
+            Tipo = tipo;
+        }
+
     }
 }
